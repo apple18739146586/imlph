@@ -34,7 +34,7 @@ plt.rcParams['xtick.labelsize'] = 7
 plt.rcParams['ytick.labelsize'] = 7
 plt.rcParams['legend.fontsize'] = 7
 
-
+# function style_panel definition
 def style_panel(ax, letter, desc=None, desc_offset=-26):
     ax.text(-0.02, 1.04, f'({letter})', transform=ax.transAxes, fontsize=10, fontweight='bold', va='bottom', ha='left')
     if desc:
@@ -87,17 +87,17 @@ def clean_dataset(df, name):
     df = df[df[element_cols].sum(axis=1) > 0]
     df = df[np.isfinite(pd.to_numeric(df['y'], errors='coerce'))]
     removed = n0 - len(df)
-    print(f"{name}: 原始 {n0} 条, 剔除不完整条目 {removed} 条, 剩余 {len(df)} 条")
+    print(f"{name}: original records {n0} , {removed} incomplete records removed,  {len(df)} records remaining")
     return df.reset_index(drop=True)
 
 def l1_normalize(df, name):
     row_sums = df[element_cols].sum(axis=1)
     if (row_sums <= 0).any():
         bad = int((row_sums <= 0).sum())
-        raise ValueError(f"{name}: 存在 {bad} 行成分和<=0, 先运行 clean_dataset")
+        raise ValueError(f"{name}:  {bad} rows with composition sum ≤ 0 exist. Please run clean_dataset first")
     df = df.copy()
     df[element_cols] = df[element_cols].div(row_sums, axis=0)
-    print(f"{name}: L1归一化完成, 成分和范围 "
+    print(f"{name}:L1 normalization completed, range of composition sum "
           f"{df[element_cols].sum(axis=1).min():.4f}-{df[element_cols].sum(axis=1).max():.4f}")
     return df
 
@@ -113,11 +113,11 @@ def compute_shap_thresholds(shap_values, features, feature_names, target_feature
         ok = np.isfinite(x) & np.isfinite(y)
         x, y = x[ok], y[ok]
         if len(x) < 10:
-            print(f"  [阈值] {feat}: 有效样本 {len(x)} < 10, 跳过")
+            print(f"  [Threshold] {feat}: Number of valid samples {len(x)} < 10, skipped")
             continue
         bins = np.unique(np.quantile(x, np.linspace(0, 1, n_bins + 1)))
         if len(bins) < 4:
-            print(f"  [阈值] {feat}: 特征取值过少, 跳过")
+            print(f" [Threshold] {feat}: insufficient feature values, skipped")
             continue
         bin_id = np.clip(np.digitize(x, bins[1:-1]), 0, len(bins) - 2)
         xb, yb = [], []
@@ -128,7 +128,7 @@ def compute_shap_thresholds(shap_values, features, feature_names, target_feature
                 yb.append(float(y[m].mean()))
         xb, yb = np.array(xb), np.array(yb)
         yb_s = gaussian_filter1d(yb, sigma=1) if len(xb) >= 5 else yb
-        # 拐点
+        # elbow point
         if len(xb) >= 7:
             with np.errstate(divide='ignore', invalid='ignore'):
                 dy = np.gradient(yb_s, xb)
@@ -141,9 +141,9 @@ def compute_shap_thresholds(shap_values, features, feature_names, target_feature
                 inflection = float(np.median(xb))
         else:
             inflection = float(np.median(xb))
-        # 峰值
+        # peak value
         peak = float(xb[np.argmax(yb_s)])
-        # 饱和点
+        # saturation point
         with np.errstate(divide='ignore', invalid='ignore'):
             dy = np.gradient(yb_s, xb)
         dy = np.where(np.isfinite(dy), dy, 0.0)
@@ -153,7 +153,7 @@ def compute_shap_thresholds(shap_values, features, feature_names, target_feature
             saturation = float(xb[np.where(sat_mask)[0][0]]) if sat_mask.any() else inflection
         else:
             saturation = inflection
-        # 80% 最大值区间（仅对正 SHAP 特征有意义；SHAP 最大值<=0 时退化为全范围）
+        # 80% maximum range
         ymax = float(np.max(yb_s))
         if ymax > 0:
             m80 = yb_s >= 0.8 * ymax
@@ -174,7 +174,7 @@ def stratified_reg_split(X, y, test_size, seed):
             return train_test_split(X, y, test_size=test_size, random_state=seed, stratify=bins)
     except Exception:
         pass
-    print(" 硬度分位数分层失败, 回退为普通随机划分")
+    print(" Hardness quantile stratification failed, falling back to simple random splitting")
     return train_test_split(X, y, test_size=test_size, random_state=seed)
 
 
@@ -183,28 +183,28 @@ def fmt_ms(mean, std):
 
 
 # ============================================================
-# Step 1: 读取数据、 清洗 、成分归一化、 物理描述符 、 重叠校验
+# Step 1: Load data, clean, normalize composition, compute physical descriptors, overlap check
 # ============================================================
 print("=" * 60)
-print("Step 1: 读取数据 + 清洗 + 归一化 + 物理描述符 + 重叠校验")
+print("Step 1: Load data, clean, normalize composition, compute physical descriptors, overlap check")
 print("=" * 60)
 
 for csv in ('phase_data.csv', 'hardness.csv'):
     if not os.path.exists(csv):
-        raise FileNotFoundError(f"未找到 {csv} ")
+        raise FileNotFoundError(f" {csv} target file not found")
 
 df_phase = pd.read_csv('phase_data.csv')
 df_hard = pd.read_csv('hardness.csv')
-print(f"原始相分类数据: {len(df_phase)} 条")
-print(f"原始硬度数据: {len(df_hard)} 条")
+print(f"Original phase classification data: {len(df_phase)} records")
+print(f"Original hardness data: {len(df_hard)} records")
 
 
-df_phase = clean_dataset(df_phase, '相分类数据')
-df_hard = clean_dataset(df_hard, '硬度数据')
+df_phase = clean_dataset(df_phase, 'Phase classification data')
+df_hard = clean_dataset(df_hard, 'hardness data')
 
 
-df_phase = l1_normalize(df_phase, '相分类数据')
-df_hard = l1_normalize(df_hard, '硬度数据')
+df_phase = l1_normalize(df_phase, 'Phase classification data')
+df_hard = l1_normalize(df_hard, 'hardness data')
 
 n_before_dedup = len(df_phase)
 comp_counts = df_phase.groupby(element_cols + ['y']).size().reset_index(name='cnt')
@@ -217,21 +217,21 @@ if len(conflict_keys) > 0:
     df_phase = df_phase[~is_conflict].reset_index(drop=True)
 df_phase = df_phase.drop_duplicates().reset_index(drop=True)
 df_hard = df_hard.drop_duplicates().reset_index(drop=True)
-print(f"去重与矛盾剔除: 原始 {n_before_dedup} 条 -> 矛盾标签样本剔除 {n_conflict_rows} 条 -> "
-      f"重复剔除 {n_before_dedup - n_conflict_rows - len(df_phase)} 条 -> 剩余 {len(df_phase)} 条")
-print(f"去重后相分类数据: {len(df_phase)} 条 (BCC {int((df_phase['y'] == 1).sum())} / "
-      f"非BCC {int((df_phase['y'] == 0).sum())})")
-print(f"去重后硬度数据: {len(df_hard)} 条, 硬度范围 {df_hard['y'].min():.0f}-{df_hard['y'].max():.0f} HV")
+print(f"Deduplication and conflict removal: original {n_before_dedup} records -> {n_conflict_rows} records with conflicting labels removed -> "
+      f"{n_before_dedup - n_conflict_rows - len(df_phase)} duplicate records removed -> {len(df_phase)} records remaining")
+print(f"Deduplicated phase classification data: {len(df_phase)} records (BCC {int((df_phase['y'] == 1).sum())} / "
+      f"non-BCC {int((df_phase['y'] == 0).sum())})")
+print(f"Deduplicated hardness data: {len(df_hard)} records, hardness range {df_hard['y'].min():.0f}-{df_hard['y'].max():.0f} HV")
 
 
 q1, q3 = df_hard['y'].quantile(0.25), df_hard['y'].quantile(0.75)
 iqr = q3 - q1
 lower, upper = q1 - 1.5 * iqr, q3 + 1.5 * iqr
 outliers = df_hard[(df_hard['y'] < lower) | (df_hard['y'] > upper)]
-print(f"硬度IQR异常值范围: {lower:.1f} - {upper:.1f}, 异常值数: {len(outliers)}")
+print(f"Hardness IQR outlier range: {lower:.1f} - {upper:.1f}, number of outliers: {len(outliers)}")
 
-# 计算物理描述符
-print("\n计算物理描述符...")
+# Calculate physical descriptors
+print("\n Calculate physical descriptors")
 for df in (df_phase, df_hard):
     phys_desc = df.apply(lambda row: compute_physical_descriptors(
         {e: row[e] for e in element_cols}), axis=1)
@@ -239,14 +239,14 @@ for df in (df_phase, df_hard):
         df[col] = phys_desc[col]
 
 feature_cols = element_cols + ['delta', 'delta_chi', 'VEC', 'delta_smix', 'delta_hmix']
-print(f"特征维度: {len(feature_cols)} (8元素 + 5物理描述符)")
+print(f"Feature dimension: {len(feature_cols)} (8 elements + 5 physical descriptors)")
 
 phase_keys = set(df_phase[element_cols].round(4).apply(tuple, axis=1))
 hard_keys = df_hard[element_cols].round(4).apply(tuple, axis=1)
 n_mapped = int(hard_keys.isin(phase_keys).sum())
 overlap = len(set(hard_keys) & phase_keys)
-print(f"两数据集成分重叠样本数: {len(set(hard_keys) & phase_keys)}")
-print(f"硬度样本映射到相数据集: {n_mapped}/{len(hard_keys)}")
+print(f"Number of overlapping composition samples between the two datasets: {len(set(hard_keys) & phase_keys)}")
+print(f"Map hardness samples to the phase dataset: {n_mapped}/{len(hard_keys)}")
 full_overlap = (n_mapped == len(hard_keys))
 if not full_overlap:
     print("'every hardness sample maps compositionally onto the phase dataset' ")
@@ -257,23 +257,23 @@ X_h = df_hard[feature_cols].values
 y_h = df_hard['y'].values
 
 # ============================================================
-# Step 2: 主模型训练
+# Step 2: Train the main model
 # ============================================================
 print("\n" + "=" * 60)
-print("Step 2: 主模型训练")
+print("Step 2: Train the main model")
 print("=" * 60)
 
 Xp_train, Xp_test, yp_train, yp_test = train_test_split(
     X_p, y_p, test_size=0.3, random_state=42, stratify=y_p)
 Xh_train, Xh_test, yh_train, yh_test = stratified_reg_split(X_h, y_h, 0.3, 42)
-print(f"训练/测试集: 分类 {len(Xp_train)}/{len(Xp_test)}, 回归 {len(Xh_train)}/{len(Xh_test)}")
-print(f"测试集硬度范围: {yh_test.min():.0f} - {yh_test.max():.0f} HV")
+print(f"Train/test split: classification {len(Xp_train)}/{len(Xp_test)}, regression {len(Xh_train)}/{len(Xh_test)}")
+print(f"Test set hardness range: {yh_test.min():.0f} - {yh_test.max():.0f} HV")
 
 skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 kf = KFold(n_splits=5, shuffle=True, random_state=42)
 
-# ---------- 分类模型 ----------
-print("\n--- 分类模型 ---")
+# ---------- classification model ----------
+print("\n--- classification model ---")
 baseline_cls = {
     'Logistic Regression': LogisticRegression(max_iter=2000, random_state=42),
     'SVM': SVC(probability=True, random_state=42),
@@ -321,20 +321,20 @@ for name, model in cls_models.items():
 tree_cls_names = [k for k in cls_models]
 best_cls_name = max(tree_cls_names, key=lambda k: cls_results[k]['cv_accuracy'])
 best_cls = cls_results[best_cls_name]['model']
-print(f"\n最优分类模型): {best_cls_name} "
+print(f"\n the best classification model): {best_cls_name} "
       f"(CV={cls_results[best_cls_name]['cv_accuracy']:.4f}, "
       f"Acc={cls_results[best_cls_name]['accuracy']:.4f}, "
       f"AUC={cls_results[best_cls_name]['auc']:.4f})")
 if 'SVM' in cls_results and cls_results['SVM']['accuracy'] > cls_results[best_cls_name]['accuracy']:
-    print(f"[说明] SVM 单次划分 Acc={cls_results['SVM']['accuracy']:.4f} 高于 {best_cls_name}; "
-          f"仍选树模型: TreeExplainer SHAP ")
-print("\n分类报告:")
+    print(f"[Info] SVM single split Acc={cls_results['SVM']['accuracy']:.4f} higher than {best_cls_name}; "
+          f"Keep the tree model: TreeExplainer SHAP ")
+print("\nClassification report:")
 print(classification_report(yp_test, best_cls.predict(Xp_test), target_names=['FCC/Other', 'BCC']))
 cm = confusion_matrix(yp_test, best_cls.predict(Xp_test))
-print(f"混淆矩阵 :\n{cm}")
+print(f"Confusion matrix :\n{cm}")
 
-# ---------- 回归模型 ----------
-print("\n--- 回归模型 ---")
+# ---------- regression model ----------
+print("\n--- regression model ---")
 baseline_reg = {
     'Linear Regression': LinearRegression(),
 }
@@ -405,24 +405,24 @@ for name, model in reg_models.items():
 best_reg_name = max(reg_models, key=lambda k: reg_results[k]['cv_r2'])
 best_reg = reg_results[best_reg_name]['model']
 yh_pred_test = reg_results[best_reg_name]['y_pred']
-print(f"\n最优回归模型(按5折CV-R²选择): {best_reg_name} (CV-R²={reg_results[best_reg_name]['cv_r2']:.4f}, "
+print(f"\n Best regression model (selected by 5-fold CV R²): {best_reg_name} (CV-R²={reg_results[best_reg_name]['cv_r2']:.4f}, "
       f"R²={reg_results[best_reg_name]['R2']:.4f})")
 
 residuals = yh_test - yh_pred_test
-print(f"残差统计: 均值={residuals.mean():.2f}, 标准差={residuals.std():.2f}")
+print(f" Residual statistics: mean={residuals.mean():.2f}, std={residuals.std():.2f} ")
 high_hard_mask = yh_test > 500
 if high_hard_mask.sum() >= 2:
     high_rmse = float(np.sqrt(mean_squared_error(yh_test[high_hard_mask], yh_pred_test[high_hard_mask])))
-    print(f"高硬度区(>500HV)样本数: {int(high_hard_mask.sum())}, RMSE={high_rmse:.2f}")
+    print(f"Number of samples in the high-hardness region (>500 HV): {int(high_hard_mask.sum())}, RMSE={high_rmse:.2f}")
 else:
     high_rmse = None
-    print(f"高硬度区(>500HV)样本数: {int(high_hard_mask.sum())} (<2), RMSE 未计算")
+    print(f"Number of samples in the high-hardness region (>500 HV): {int(high_hard_mask.sum())} (<2), RMSE Not computed")
 
 # ============================================================
-# Step 3: 重复验证
+# Step 3: Repeated validation
 # ============================================================
 print("\n" + "=" * 60)
-print("Step 3: 重复验证")
+print("Step 3: Repeated validation")
 print("=" * 60)
 
 n_repeats = 10
@@ -432,7 +432,7 @@ reg_best_params = {k: v for k, v in reg_results['XGBoost']['best_params'].items(
 
 for rep in range(n_repeats):
     seed = 42 + rep
-    # 分类（XGBoost + 调参后超参数）
+    # Classification (XGBoost with tuned hyperparameters)
     Xp_tr, Xp_te, yp_tr, yp_te = train_test_split(X_p, y_p, test_size=0.3, random_state=seed, stratify=y_p)
     cls_model = XGBClassifier(random_state=seed, eval_metric='logloss', **cls_best_params)
     cls_model.fit(Xp_tr, yp_tr)
@@ -440,7 +440,7 @@ for rep in range(n_repeats):
     yp_prob = cls_model.predict_proba(Xp_te)[:, 1]
     repeat_results['cls_acc'].append(accuracy_score(yp_te, yp_pred))
     repeat_results['cls_auc'].append(roc_auc_score(yp_te, yp_prob))
-    # 回归（XGBoost + 调参后超参数）
+    # Regression (XGBoost with tuned hyperparameters)
     Xh_tr, Xh_te, yh_tr, yh_te = stratified_reg_split(X_h, y_h, 0.3, seed)
     reg_model = XGBRegressor(random_state=seed, **reg_best_params)
     reg_model.fit(Xh_tr, yh_tr)
@@ -448,15 +448,15 @@ for rep in range(n_repeats):
     repeat_results['reg_r2'].append(r2_score(yh_te, yh_pred))
     repeat_results['reg_rmse'].append(np.sqrt(mean_squared_error(yh_te, yh_pred)))
 
-print(f"\n重复验证结果（XGBoost, 调参后参数 = {reg_best_params}）:")
-print(f"  分类准确率: {np.mean(repeat_results['cls_acc']):.3f} ± {np.std(repeat_results['cls_acc']):.3f}")
-print(f"  分类AUC: {np.mean(repeat_results['cls_auc']):.3f} ± {np.std(repeat_results['cls_auc']):.3f}")
-print(f"  回归R²: {np.mean(repeat_results['reg_r2']):.3f} ± {np.std(repeat_results['reg_r2']):.3f} "
+print(f"\n Repeated validation results (XGBoost, tuned hyperparameters = {reg_best_params}）:")
+print(f"  Classification accuracy: {np.mean(repeat_results['cls_acc']):.3f} ± {np.std(repeat_results['cls_acc']):.3f}")
+print(f"  ClassificationAUC: {np.mean(repeat_results['cls_auc']):.3f} ± {np.std(repeat_results['cls_auc']):.3f}")
+print(f"  Regression R²: {np.mean(repeat_results['reg_r2']):.3f} ± {np.std(repeat_results['reg_r2']):.3f} "
       f"( mean test R² ± std)")
-print(f"  回归RMSE: {np.mean(repeat_results['reg_rmse']):.1f} ± {np.std(repeat_results['reg_rmse']):.1f} HV")
+print(f"  Classification RMSE: {np.mean(repeat_results['reg_rmse']):.1f} ± {np.std(repeat_results['reg_rmse']):.1f} HV")
 
 # ============================================================
-# Step 4: 数据集分布动态样本数
+# Step 4: Dynamic sample counts across dataset splits
 # ============================================================
 print("\n" + "=" * 60)
 print("Step 4: Fig1")
@@ -498,10 +498,10 @@ plt.savefig('Fig1_dataset_distribution.png')
 plt.savefig('Fig1_dataset_distribution.pdf')
 plt.savefig('Fig1_dataset_distribution.eps')
 plt.close()
-print(f"Fig1已保存 (n={n_phase}/{n_hard})")
+print(f"Fig1 saved (n={n_phase}/{n_hard})")
 
 # ============================================================
-# Step 5: 模型性能
+# Step 5: Model performance
 # ============================================================
 print("\nStep 5: Fig2")
 fig, axes = plt.subplots(2, 2, figsize=(7.5, 6.1))
@@ -562,13 +562,13 @@ plt.savefig('Fig2_model_performance.png')
 plt.savefig('Fig2_model_performance.pdf')
 plt.savefig('Fig2_model_performance.eps')
 plt.close()
-print("Fig2已保存（含混淆矩阵、R²/RMSE、残差图）")
+print("Fig2 saved")
 
 # ============================================================
-# Step 6: SHAP分析 + 交互分析 + 阈值提取
+# Step 6: SHAP analysis , interaction analysis , threshold extraction
 # ============================================================
 print("\n" + "=" * 60)
-print("Step 6: SHAP分析 + 交互分析 + 阈值提取")
+print("Step 6: SHAP analysis , interaction analysis , threshold extraction")
 print("=" * 60)
 explainer_cls = shap.TreeExplainer(best_cls)
 shap_cls_raw = explainer_cls.shap_values(Xp_test)
@@ -614,9 +614,9 @@ plt.sca(axes[1, 1])
 shap.summary_plot(shap_reg, Xh_test, feature_names=feature_cols, plot_type="bar", show=False, max_display=13, plot_size=None)
 _polish_shap(axes[1, 1], 'Mean |SHAP value|')
 style_panel(axes[1, 1], 'd', 'Mean |SHAP|: hardness', desc_offset=-24)
-print("Fig3 绘制完成 ")
+print("Fig3 have been ploted ")
 
-# SHAP依赖图
+# SHAP dependency graph
 fig, axes = plt.subplots(2, 2, figsize=(7.5, 6.1))
 plt.sca(axes[0, 0])
 shap.dependence_plot('Al', shap_reg, Xh_test, feature_names=feature_cols, ax=axes[0, 0], show=False)
@@ -636,9 +636,9 @@ plt.savefig('Fig3b_SHAP_dependence.png')
 plt.savefig('Fig3b_SHAP_dependence.pdf')
 plt.savefig('Fig3b_SHAP_dependence.eps')
 plt.close()
-print("SHAP依赖图已保存")
+print("SHAP dependency graph saved")
 
-print("\n--- SHAP interaction 分析 ---")
+print("\n--- SHAP interaction analysis ---")
 interaction_summary = {}
 try:
     inter_cls_raw = explainer_cls.shap_interaction_values(Xp_test)
@@ -676,17 +676,17 @@ try:
     fig3.savefig('Fig3_SHAP_analysis.pdf')
     fig3.savefig('Fig3_SHAP_analysis.eps')
     plt.close(fig3)
-    print("Fig3已保存")
+    print("Fig3 saved")
     for task, s in interaction_summary.items():
-        print(f"{task} 交互 Top5:")
+        print(f"{task} interaction Top5:")
         for f1, f2, v in s['top_pairs']:
             print(f"  {f1}–{f2}: {v:.3f}")
     for task, s in interaction_summary.items():
         m = s['matrix']
         al_v = m[feature_cols.index('Al'), feature_cols.index('V')]
-        print(f"{task} Al–V 平均|交互| = {al_v:.3f} ( 'Al–V synergy' 的量化依据)")
+        print(f"{task} Al–V mean |interaction| = {al_v:.3f} (quantitative basis for 'Al–V synergy')")
 except Exception as e:
-    print(f"️ SHAP交互计算失败: {e}")
+    print(f"️ SHAP interaction compute failed: {e}")
 
     try:
         fig3.tight_layout(h_pad=2.4, w_pad=1.2)
@@ -694,38 +694,38 @@ except Exception as e:
         fig3.savefig('Fig3_SHAP_analysis.pdf')
         fig3.savefig('Fig3_SHAP_analysis.eps')
         plt.close(fig3)
-        print("Fig3已保存")
+        print("Fig3 saved")
     except Exception as e2:
-        print(f" Fig3保存失败: {e2}")
+        print(f" Fig3 save failed: {e2}")
 
 
-print("\n--- SHAP阈值提取---")
+print("\n--- SHAP Threshold extraction---")
 cls_thresholds = compute_shap_thresholds(shap_cls, Xp_test, feature_cols, ('Al', 'VEC', 'delta'))
 reg_thresholds = compute_shap_thresholds(shap_reg, Xh_test, feature_cols, ('Al', 'VEC', 'delta'))
-print("相分类SHAP阈值:")
+print(" Phase classification SHAP Threshold:")
 for feat, vals in cls_thresholds.items():
-    print(f"  {feat}: 拐点={vals['inflection']:.3f}, 饱和点={vals['saturation']:.3f}, "
-          f"峰值={vals['peak']:.3f}, 80%区间={vals['region80'][0]:.3f}-{vals['region80'][1]:.3f}, "
-          f"范围={vals['x_range'][0]:.3f}-{vals['x_range'][1]:.3f}")
-print("硬度预测SHAP阈值:")
+    print(f"  {feat}: elbow point={vals['inflection']:.3f}, satuation point ={vals['saturation']:.3f}, "
+          f"peak value ={vals['peak']:.3f}, 80%range ={vals['region80'][0]:.3f}-{vals['region80'][1]:.3f}, "
+          f"range={vals['x_range'][0]:.3f}-{vals['x_range'][1]:.3f}")
+print("SHAP threshold for hardness prediction:")
 for feat, vals in reg_thresholds.items():
-    print(f"  {feat}: 拐点={vals['inflection']:.3f}, 饱和点={vals['saturation']:.3f}, "
-          f"峰值={vals['peak']:.3f}, 80%区间={vals['region80'][0]:.3f}-{vals['region80'][1]:.3f}, "
-          f"范围={vals['x_range'][0]:.3f}-{vals['x_range'][1]:.3f}")
+    print(f"  {feat}: elbow point ={vals['inflection']:.3f}, satuation point={vals['saturation']:.3f}, "
+          f"peak value={vals['peak']:.3f}, 80%range={vals['region80'][0]:.3f}-{vals['region80'][1]:.3f}, "
+          f"range={vals['x_range'][0]:.3f}-{vals['x_range'][1]:.3f}")
 
 
 cls_imp = pd.DataFrame({'Feature': feature_cols, 'Mean_SHAP': np.abs(shap_cls).mean(axis=0)}).sort_values('Mean_SHAP', ascending=False)
 reg_imp = pd.DataFrame({'Feature': feature_cols, 'Mean_SHAP': np.abs(shap_reg).mean(axis=0)}).sort_values('Mean_SHAP', ascending=False)
-print("\n相分类SHAP重要性 (13特征):")
+print("\nSHAP importance for phase classification (13 features):")
 print(cls_imp.to_string(index=False))
-print("\n硬度预测SHAP重要性 (13特征):")
+print("\n SHAP importance for hardness prediction (13 features):")
 print(reg_imp.to_string(index=False))
 
 # ============================================================
-# Step 7: 虚拟筛选
+# Step 7: Virtual screening
 # ============================================================
 print("\n" + "=" * 60)
-print("Step 7: 虚拟筛选")
+print("Step 7: Virtual screening")
 print("=" * 60)
 np.random.seed(123)
 n_cand = 10000
@@ -738,10 +738,10 @@ for i, e in enumerate(element_cols):
         cand_elem[:, i] = lo
 row_sums = cand_elem.sum(axis=1, keepdims=True)
 if (row_sums <= 0).any():
-    raise ValueError("候选成分出现全零行")
+    raise ValueError("Candidate composition contains all-zero rows")
 cand_elem = cand_elem / row_sums
 
-print("计算候选成分物理描述符...")
+print("Compute physical descriptors for candidate compositions")
 cand_phys_list = []
 for j in range(n_cand):
     comp = {e: cand_elem[j, i] for i, e in enumerate(element_cols)}
@@ -760,7 +760,7 @@ train_dists = d_train[:, 1]
 ad_threshold = float(np.percentile(train_dists, 95))
 min_distances, _ = tree.query(cand_scaled, k=1)
 in_ad = min_distances <= ad_threshold
-print(f"AD阈值: {ad_threshold:.3f}, AD内候选: {int(in_ad.sum())}/{n_cand}")
+print(f"AD threshold: {ad_threshold:.3f}, AD internal candidates: {int(in_ad.sum())}/{n_cand}")
 
 cand_in = cand_all[in_ad]
 cand_phase_prob = best_cls.predict_proba(cand_in)[:, 1]
@@ -770,15 +770,15 @@ cand_df['BCC_prob'] = cand_phase_prob
 cand_df['Predicted_HV'] = cand_hardness
 cand_df['score'] = cand_df['BCC_prob'] * cand_df['Predicted_HV']
 top10 = cand_df.nlargest(10, 'score').reset_index(drop=True)
-print("\nTop10候选:")
+print("\nTop10 candidate:")
 print(top10[element_cols + ['BCC_prob', 'Predicted_HV']].to_string(index=False))
 top10.to_excel('virtual_screening_top10.xlsx', index=False)
 
-# 检查最高成分是否在训练集中
+# Check whether the top composition is in the training set
 top_comp = tuple(round(top10.iloc[0][e], 4) for e in element_cols)
 train_comps = set(tuple(round(x[i], 4) for i in range(len(element_cols))) for x in Xh_train)
 in_train = top_comp in train_comps
-print(f"\n最高成分是否在训练集中: {'是' if in_train else '否（新成分）'}")
+print(f"\n Check whether the top composition is in the training set: {'Yes' if in_train else 'No'}")
 
 fig, axes = plt.subplots(1, 3, figsize=(7.5, 3.6))
 sc = axes[0].scatter(cand_in[:, 0], cand_in[:, feature_cols.index('VEC')], c=cand_hardness,
@@ -810,68 +810,68 @@ plt.savefig('Fig4_virtual_screening.png')
 plt.savefig('Fig4_virtual_screening.pdf')
 plt.savefig('Fig4_virtual_screening.eps')
 plt.close()
-print("Fig4已保存")
+print("Fig4 Saved")
 
 # ============================================================
-# 保存所有结果
+# Save all the results
 # ============================================================
 print("\n" + "=" * 60)
-print("保存结果")
+print("save results")
 print("=" * 60)
 with open('results_summary.txt', 'w', encoding='utf-8') as f:
-    f.write("=== 最终结果汇总 (v5) ===\n\n")
-    f.write(f"数据集: 相分类{n_phase}条 (BCC {int((df_phase['y'] == 1).sum())} / "
-            f"非BCC {int((df_phase['y'] == 0).sum())}), 硬度{n_hard}条 "
+    f.write("=== final results sunmmary (v5) ===\n\n")
+    f.write(f"dataset: Phase classification: {n_phase} records (BCC {int((df_phase['y'] == 1).sum())} / "
+            f"non-BCC {int((df_phase['y'] == 0).sum())}), Hardness: {n_hard} records "
             f"({df_hard['y'].min():.0f}-{df_hard['y'].max():.0f} HV)\n")
-    f.write(f"训练/测试: 分类{len(Xp_train)}/{len(Xp_test)}, 回归{len(Xh_train)}/{len(Xh_test)}\n")
-    f.write(f"硬度样本成分映射到相数据集: {n_mapped}/{n_hard} "
-            f"({'完整映射' if full_overlap else '不完整'})\n\n")
-    f.write("=== 分类模型 (含基线5折CV) ===\n")
+    f.write(f"Train/test: classification {len(Xp_train)}/{len(Xp_test)}, regression {len(Xh_train)}/{len(Xh_test)}\n")
+    f.write(f"Map hardness sample compositions to the phase dataset: {n_mapped}/{n_hard} "
+            f"({'Complete mapping' if full_overlap else 'Incomplete'})\n\n")
+    f.write("=== Classification models (including baseline, 5-fold CV) ===\n")
     for name, res in cls_results.items():
         f.write(f"{name}: Acc={res['accuracy']:.4f}, AUC={res['auc']:.4f}, "
                 f"5-fold CV={res['cv_accuracy']:.4f} ± {res['cv_std']:.4f}")
         if 'best_params' in res:
             f.write(f", best_params={res['best_params']}")
         f.write("\n")
-    f.write(f"\n最优(按CV选择): {best_cls_name}\n")
-    f.write(f"混淆矩阵: {cm.tolist()}\n\n")
-    f.write("=== 回归模型 (含基线5折CV) ===\n")
+    f.write(f"\n Best (selected by CV): {best_cls_name}\n")
+    f.write(f"Confuse Matrix: {cm.tolist()}\n\n")
+    f.write("=== Classification model (including baseline 5-fold CV) ===\n")
     for name, res in reg_results.items():
         f.write(f"{name}: R²={res['R2']:.4f}, RMSE={res['RMSE']:.2f}, MAE={res['MAE']:.2f}, "
                 f"5-fold CV-R²={res['cv_r2']:.4f} ± {res['cv_std']:.4f}")
         if 'best_params' in res:
             f.write(f", best_params={res['best_params']}")
         f.write("\n")
-    f.write(f"\n最优(按CV选择): {best_reg_name}\n")
+    f.write(f"\n Best(selected by CV): {best_reg_name}\n")
     if high_rmse is not None:
-        f.write(f"高硬度区(>500HV) RMSE: {high_rmse:.2f} (样本数 {int(high_hard_mask.sum())})\n")
+        f.write(f"high-hardness region (>500HV) RMSE: {high_rmse:.2f} (sample number {int(high_hard_mask.sum())})\n")
     else:
-        f.write("高硬度区(>500HV) 样本不足, RMSE 未计算\n")
-    f.write("\n=== 重复验证 (XGBoost, 调参后超参数) ===\n")
-    f.write(f"分类准确率: {np.mean(repeat_results['cls_acc']):.3f} ± {np.std(repeat_results['cls_acc']):.3f}\n")
-    f.write(f"分类AUC: {np.mean(repeat_results['cls_auc']):.3f} ± {np.std(repeat_results['cls_auc']):.3f}\n")
-    f.write(f"回归R²: {np.mean(repeat_results['reg_r2']):.3f} ± {np.std(repeat_results['reg_r2']):.3f}\n")
-    f.write(f"回归RMSE: {np.mean(repeat_results['reg_rmse']):.1f} ± {np.std(repeat_results['reg_rmse']):.1f} HV\n\n")
-    f.write("=== SHAP阈值 ===\n")
-    f.write("相分类:\n")
+        f.write("high-hardness region (>500HV) sample insufficient, RMSE uncompute\n")
+    f.write("\n=== Repeated validation (XGBoost, Tuned hyperparameters) ===\n")
+    f.write(f"Classification precision: {np.mean(repeat_results['cls_acc']):.3f} ± {np.std(repeat_results['cls_acc']):.3f}\n")
+    f.write(f"Classification AUC: {np.mean(repeat_results['cls_auc']):.3f} ± {np.std(repeat_results['cls_auc']):.3f}\n")
+    f.write(f"Regression R²: {np.mean(repeat_results['reg_r2']):.3f} ± {np.std(repeat_results['reg_r2']):.3f}\n")
+    f.write(f"Regression RMSE: {np.mean(repeat_results['reg_rmse']):.1f} ± {np.std(repeat_results['reg_rmse']):.1f} HV\n\n")
+    f.write("=== SHAP threshold ===\n")
+    f.write("phase classification:\n")
     for feat, vals in cls_thresholds.items():
-        f.write(f"  {feat}: 拐点={vals['inflection']:.3f}, 饱和点={vals['saturation']:.3f}, "
-                f"峰值={vals['peak']:.3f}, 80%区间={vals['region80'][0]:.3f}-{vals['region80'][1]:.3f}\n")
-    f.write("硬度预测:\n")
+        f.write(f"  {feat}: elbow point ={vals['inflection']:.3f}, saturation point ={vals['saturation']:.3f}, "
+                f"peak value={vals['peak']:.3f}, 80%range={vals['region80'][0]:.3f}-{vals['region80'][1]:.3f}\n")
+    f.write("hardness prediction:\n")
     for feat, vals in reg_thresholds.items():
-        f.write(f"  {feat}: 拐点={vals['inflection']:.3f}, 饱和点={vals['saturation']:.3f}, "
-                f"峰值={vals['peak']:.3f}, 80%区间={vals['region80'][0]:.3f}-{vals['region80'][1]:.3f}\n")
+        f.write(f"  {feat}: elbow point={vals['inflection']:.3f}, saturation={vals['saturation']:.3f}, "
+                f"peak value={vals['peak']:.3f}, 80%range={vals['region80'][0]:.3f}-{vals['region80'][1]:.3f}\n")
     if interaction_summary:
-        f.write("\n=== SHAP交互 Top5 ===\n")
+        f.write("\n=== SHAP interaction Top5 ===\n")
         for task, s in interaction_summary.items():
             f.write(f"{task}:\n")
             for f1, f2, v in s['top_pairs']:
                 f.write(f"  {f1}–{f2}: {v:.3f}\n")
-    f.write("\n=== 虚拟筛选 ===\n")
-    f.write(f"AD阈值: {ad_threshold:.3f}\n")
-    f.write(f"AD内候选: {int(in_ad.sum())}/{n_cand}\n")
-    f.write(f"最高成分是否在训练集: {'否（新成分）' if not in_train else '是'}\n")
-    f.write("\nTop10候选:\n")
+    f.write("\n=== Virtual screening ===\n")
+    f.write(f"AD threshold: {ad_threshold:.3f}\n")
+    f.write(f"AD inner candidate: {int(in_ad.sum())}/{n_cand}\n")
+    f.write(f"Whether the top composition is in the training set: {'No（new component）' if not in_train else 'Yes'}\n")
+    f.write("\nTop10 candidate:\n")
     f.write(top10[element_cols + ['BCC_prob', 'Predicted_HV']].to_string(index=False))
 
-print("结果已保存到 results_summary.txt")
+print("Results saved as results_summary.txt")
