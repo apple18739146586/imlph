@@ -1,6 +1,3 @@
-"""
-
-"""
 import os
 import warnings
 warnings.filterwarnings('ignore')
@@ -14,8 +11,7 @@ from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.svm import SVC, SVR
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import (accuracy_score, classification_report, confusion_matrix,
-                             r2_score, mean_squared_error, mean_absolute_error, roc_auc_score)
+from sklearn.metrics import (accuracy_score, classification_report, confusion_matrix,r2_score, mean_squared_error, mean_absolute_error, roc_auc_score)
 from xgboost import XGBClassifier, XGBRegressor
 from lightgbm import LGBMClassifier, LGBMRegressor
 from scipy.ndimage import gaussian_filter1d
@@ -40,19 +36,12 @@ plt.rcParams['legend.fontsize'] = 7
 
 
 def style_panel(ax, letter, desc=None, desc_offset=-26):
-    """
-
-    """
-    ax.text(-0.02, 1.04, f'({letter})', transform=ax.transAxes,
-            fontsize=10, fontweight='bold', va='bottom', ha='left')
+    ax.text(-0.02, 1.04, f'({letter})', transform=ax.transAxes, fontsize=10, fontweight='bold', va='bottom', ha='left')
     if desc:
-        ax.annotate(desc, xy=(0.5, 0.0), xycoords='axes fraction',
-                    xytext=(0, desc_offset), textcoords='offset points',
-                    ha='center', va='top', fontsize=8, annotation_clip=False)
+        ax.annotate(desc, xy=(0.5, 0.0), xycoords='axes fraction',xytext=(0, desc_offset), textcoords='offset points', ha='center', va='top', fontsize=8, annotation_clip=False)
 
 element_cols = ['Al', 'Ti', 'V', 'Cr', 'Fe', 'Co', 'Ni', 'Cu']
 
-# 元素物理参数
 atomic_radius = {'Al': 143, 'Ti': 145, 'V': 134, 'Cr': 128, 'Fe': 126, 'Co': 125, 'Ni': 124, 'Cu': 128}
 electronegativity = {'Al': 1.61, 'Ti': 1.54, 'V': 1.63, 'Cr': 1.66, 'Fe': 1.83, 'Co': 1.88, 'Ni': 1.91, 'Cu': 1.90}
 VEC_dict = {'Al': 3, 'Ti': 4, 'V': 5, 'Cr': 6, 'Fe': 8, 'Co': 9, 'Ni': 10, 'Cu': 11}
@@ -68,12 +57,10 @@ mix_enthalpy = {
 R = 8.314
 
 
-def compute_physical_descriptors(comp_dict):
-    """计算合金的热力学/物理描述符（δ, Δχ, VEC, ΔSmix, ΔHmix）"""
+def compute_physical_descriptors(comp_dict):    
     elements = [e for e, c in comp_dict.items() if c > 0]
     if not elements:
-        return pd.Series({'delta': np.nan, 'delta_chi': np.nan, 'VEC': np.nan,
-                          'delta_smix': np.nan, 'delta_hmix': np.nan})
+        return pd.Series({'delta': np.nan, 'delta_chi': np.nan, 'VEC': np.nan, 'delta_smix': np.nan, 'delta_hmix': np.nan})
     c = np.array([comp_dict[e] for e in elements])
     c = c / c.sum()
     r = np.array([atomic_radius[e] for e in elements])
@@ -91,9 +78,7 @@ def compute_physical_descriptors(comp_dict):
             key = (e1, e2) if (e1, e2) in mix_enthalpy else (e2, e1)
             if key in mix_enthalpy:
                 delta_hmix += 4 * mix_enthalpy[key] * c[i] * c[j]
-    return pd.Series({'delta': delta, 'delta_chi': delta_chi, 'VEC': vec,
-                      'delta_smix': delta_smix, 'delta_hmix': delta_hmix})
-
+    return pd.Series({'delta': delta, 'delta_chi': delta_chi, 'VEC': vec, 'delta_smix': delta_smix, 'delta_hmix': delta_hmix})
 
 def clean_dataset(df, name):
     n0 = len(df)
@@ -102,15 +87,14 @@ def clean_dataset(df, name):
     df = df[df[element_cols].sum(axis=1) > 0]
     df = df[np.isfinite(pd.to_numeric(df['y'], errors='coerce'))]
     removed = n0 - len(df)
-    print(f"{name}: 原始 {n0} 条, 剔除不完整/非法条目 {removed} 条, 剩余 {len(df)} 条")
+    print(f"{name}: 原始 {n0} 条, 剔除不完整条目 {removed} 条, 剩余 {len(df)} 条")
     return df.reset_index(drop=True)
-
 
 def l1_normalize(df, name):
     row_sums = df[element_cols].sum(axis=1)
     if (row_sums <= 0).any():
         bad = int((row_sums <= 0).sum())
-        raise ValueError(f"{name}: 存在 {bad} 行成分和<=0, 请先运行 clean_dataset")
+        raise ValueError(f"{name}: 存在 {bad} 行成分和<=0, 先运行 clean_dataset")
     df = df.copy()
     df[element_cols] = df[element_cols].div(row_sums, axis=0)
     print(f"{name}: L1归一化完成, 成分和范围 "
@@ -118,8 +102,7 @@ def l1_normalize(df, name):
     return df
 
 
-def compute_shap_thresholds(shap_values, features, feature_names,
-                            target_features=('Al', 'VEC', 'delta'), n_bins=20):
+def compute_shap_thresholds(shap_values, features, feature_names, target_features=('Al', 'VEC', 'delta'), n_bins=20):
     thresholds = {}
     for feat in target_features:
         if feat not in feature_names:
@@ -191,7 +174,7 @@ def stratified_reg_split(X, y, test_size, seed):
             return train_test_split(X, y, test_size=test_size, random_state=seed, stratify=bins)
     except Exception:
         pass
-    print("  [提示] 硬度分位数分层失败, 回退为普通随机划分")
+    print(" 硬度分位数分层失败, 回退为普通随机划分")
     return train_test_split(X, y, test_size=test_size, random_state=seed)
 
 
@@ -200,7 +183,7 @@ def fmt_ms(mean, std):
 
 
 # ============================================================
-# Step 1: 读取数据 + 清洗(incomplete entries) + 成分归一化 + 物理描述符 + 重叠校验
+# Step 1: 读取数据、 清洗 、成分归一化、 物理描述符 、 重叠校验
 # ============================================================
 print("=" * 60)
 print("Step 1: 读取数据 + 清洗 + 归一化 + 物理描述符 + 重叠校验")
@@ -208,7 +191,7 @@ print("=" * 60)
 
 for csv in ('phase_data.csv', 'hardness.csv'):
     if not os.path.exists(csv):
-        raise FileNotFoundError(f"未找到 {csv} —— 请将数据文件放在本脚本同目录下运行")
+        raise FileNotFoundError(f"未找到 {csv} ")
 
 df_phase = pd.read_csv('phase_data.csv')
 df_hard = pd.read_csv('hardness.csv')
@@ -258,12 +241,11 @@ for df in (df_phase, df_hard):
 feature_cols = element_cols + ['delta', 'delta_chi', 'VEC', 'delta_smix', 'delta_hmix']
 print(f"特征维度: {len(feature_cols)} (8元素 + 5物理描述符)")
 
-
 phase_keys = set(df_phase[element_cols].round(4).apply(tuple, axis=1))
 hard_keys = df_hard[element_cols].round(4).apply(tuple, axis=1)
 n_mapped = int(hard_keys.isin(phase_keys).sum())
 overlap = len(set(hard_keys) & phase_keys)
-print(f"两数据集成分重叠样本数(去重口径): {len(set(hard_keys) & phase_keys)}")
+print(f"两数据集成分重叠样本数: {len(set(hard_keys) & phase_keys)}")
 print(f"硬度样本映射到相数据集: {n_mapped}/{len(hard_keys)}")
 full_overlap = (n_mapped == len(hard_keys))
 if not full_overlap:
@@ -275,10 +257,10 @@ X_h = df_hard[feature_cols].values
 y_h = df_hard['y'].values
 
 # ============================================================
-# Step 2: 主模型训练（seed=42）—— 调参 + 基线CV
+# Step 2: 主模型训练
 # ============================================================
 print("\n" + "=" * 60)
-print("Step 2: 主模型训练（seed=42, 调参 + 基线5折CV）")
+print("Step 2: 主模型训练")
 print("=" * 60)
 
 Xp_train, Xp_test, yp_train, yp_test = train_test_split(
@@ -303,8 +285,7 @@ cls_models = {
 }
 cls_param_grids = {
     'Random Forest': {'n_estimators': [100, 200, 300], 'max_depth': [None, 10, 20]},
-    'XGBoost': {'n_estimators': [100, 200, 300], 'learning_rate': [0.05, 0.1], 'max_depth': [4, 5, 6],
-                'subsample': [0.8, 0.9, 1.0], 'colsample_bytree': [0.8, 0.9, 1.0]},
+    'XGBoost': {'n_estimators': [100, 200, 300], 'learning_rate': [0.05, 0.1], 'max_depth': [4, 5, 6], 'subsample': [0.8, 0.9, 1.0], 'colsample_bytree': [0.8, 0.9, 1.0]},
     'LightGBM': {'n_estimators': [100, 200], 'learning_rate': [0.05, 0.1], 'max_depth': [4, 6]},
 }
 
@@ -370,8 +351,7 @@ reg_models = {
 }
 reg_param_grids = {
     'Random Forest': {'n_estimators': [100, 200, 300], 'max_depth': [None, 10, 20]},
-    'XGBoost': {'n_estimators': [100, 200, 300], 'learning_rate': [0.05, 0.1], 'max_depth': [3, 4, 5],
-                'subsample': [0.8, 0.9, 1.0], 'colsample_bytree': [0.8, 0.9, 1.0]},
+    'XGBoost': {'n_estimators': [100, 200, 300], 'learning_rate': [0.05, 0.1], 'max_depth': [3, 4, 5], 'subsample': [0.8, 0.9, 1.0], 'colsample_bytree': [0.8, 0.9, 1.0]},
     'LightGBM': {'n_estimators': [100, 200], 'learning_rate': [0.05, 0.1], 'max_depth': [3, 4, 6]},
 }
 
@@ -439,10 +419,10 @@ else:
     print(f"高硬度区(>500HV)样本数: {int(high_hard_mask.sum())} (<2), RMSE 未计算")
 
 # ============================================================
-# Step 3: 10次重复验证使用调参后的最优超参数）
+# Step 3: 重复验证
 # ============================================================
 print("\n" + "=" * 60)
-print("Step 3: 10次重复验证（XGBoost, 调参后最优超参数）")
+print("Step 3: 重复验证")
 print("=" * 60)
 
 n_repeats = 10
@@ -468,7 +448,7 @@ for rep in range(n_repeats):
     repeat_results['reg_r2'].append(r2_score(yh_te, yh_pred))
     repeat_results['reg_rmse'].append(np.sqrt(mean_squared_error(yh_te, yh_pred)))
 
-print(f"\n10次重复验证结果（XGBoost, 调参后参数 = {reg_best_params}）:")
+print(f"\n重复验证结果（XGBoost, 调参后参数 = {reg_best_params}）:")
 print(f"  分类准确率: {np.mean(repeat_results['cls_acc']):.3f} ± {np.std(repeat_results['cls_acc']):.3f}")
 print(f"  分类AUC: {np.mean(repeat_results['cls_auc']):.3f} ± {np.std(repeat_results['cls_auc']):.3f}")
 print(f"  回归R²: {np.mean(repeat_results['reg_r2']):.3f} ± {np.std(repeat_results['reg_r2']):.3f} "
@@ -476,7 +456,7 @@ print(f"  回归R²: {np.mean(repeat_results['reg_r2']):.3f} ± {np.std(repeat_r
 print(f"  回归RMSE: {np.mean(repeat_results['reg_rmse']):.1f} ± {np.std(repeat_results['reg_rmse']):.1f} HV")
 
 # ============================================================
-# Step 4: 数据集分布动态样本数）
+# Step 4: 数据集分布动态样本数
 # ============================================================
 print("\n" + "=" * 60)
 print("Step 4: Fig1")
@@ -521,7 +501,7 @@ plt.close()
 print(f"Fig1已保存 (n={n_phase}/{n_hard})")
 
 # ============================================================
-# Step 5: 模型性能（混淆矩阵 + R²/RMSE + 残差图）
+# Step 5: 模型性能
 # ============================================================
 print("\nStep 5: Fig2")
 fig, axes = plt.subplots(2, 2, figsize=(7.5, 6.1))
@@ -719,7 +699,7 @@ except Exception as e:
         print(f" Fig3保存失败: {e2}")
 
 
-print("\n--- SHAP阈值提取（分箱平滑 + 拐点/饱和/峰值/80%区间）---")
+print("\n--- SHAP阈值提取---")
 cls_thresholds = compute_shap_thresholds(shap_cls, Xp_test, feature_cols, ('Al', 'VEC', 'delta'))
 reg_thresholds = compute_shap_thresholds(shap_reg, Xh_test, feature_cols, ('Al', 'VEC', 'delta'))
 print("相分类SHAP阈值:")
@@ -742,7 +722,7 @@ print("\n硬度预测SHAP重要性 (13特征):")
 print(reg_imp.to_string(index=False))
 
 # ============================================================
-# Step 7: 虚拟筛选（含AD, cKDTree 加速最近邻）
+# Step 7: 虚拟筛选
 # ============================================================
 print("\n" + "=" * 60)
 print("Step 7: 虚拟筛选")
@@ -774,8 +754,8 @@ scaler_ad = StandardScaler()
 Xh_train_scaled_ad = scaler_ad.fit_transform(Xh_train)
 cand_scaled = scaler_ad.transform(cand_all)
 
-tree = cKDTree(Xh_train_scaled_ad)  # 向量化最近邻
-d_train, _ = tree.query(Xh_train_scaled_ad, k=2)   # k=2 排除自己
+tree = cKDTree(Xh_train_scaled_ad) 
+d_train, _ = tree.query(Xh_train_scaled_ad, k=2)  
 train_dists = d_train[:, 1]
 ad_threshold = float(np.percentile(train_dists, 95))
 min_distances, _ = tree.query(cand_scaled, k=1)
@@ -845,7 +825,7 @@ with open('results_summary.txt', 'w', encoding='utf-8') as f:
             f"({df_hard['y'].min():.0f}-{df_hard['y'].max():.0f} HV)\n")
     f.write(f"训练/测试: 分类{len(Xp_train)}/{len(Xp_test)}, 回归{len(Xh_train)}/{len(Xh_test)}\n")
     f.write(f"硬度样本成分映射到相数据集: {n_mapped}/{n_hard} "
-            f"({'完整映射' if full_overlap else '不完整, 与论文§2声明不符!'})\n\n")
+            f"({'完整映射' if full_overlap else '不完整'})\n\n")
     f.write("=== 分类模型 (含基线5折CV) ===\n")
     for name, res in cls_results.items():
         f.write(f"{name}: Acc={res['accuracy']:.4f}, AUC={res['auc']:.4f}, "
@@ -867,7 +847,7 @@ with open('results_summary.txt', 'w', encoding='utf-8') as f:
         f.write(f"高硬度区(>500HV) RMSE: {high_rmse:.2f} (样本数 {int(high_hard_mask.sum())})\n")
     else:
         f.write("高硬度区(>500HV) 样本不足, RMSE 未计算\n")
-    f.write("\n=== 10次重复验证 (XGBoost, 调参后超参数) ===\n")
+    f.write("\n=== 重复验证 (XGBoost, 调参后超参数) ===\n")
     f.write(f"分类准确率: {np.mean(repeat_results['cls_acc']):.3f} ± {np.std(repeat_results['cls_acc']):.3f}\n")
     f.write(f"分类AUC: {np.mean(repeat_results['cls_auc']):.3f} ± {np.std(repeat_results['cls_auc']):.3f}\n")
     f.write(f"回归R²: {np.mean(repeat_results['reg_r2']):.3f} ± {np.std(repeat_results['reg_r2']):.3f}\n")
@@ -895,5 +875,3 @@ with open('results_summary.txt', 'w', encoding='utf-8') as f:
     f.write(top10[element_cols + ['BCC_prob', 'Predicted_HV']].to_string(index=False))
 
 print("结果已保存到 results_summary.txt")
-print("\n全部完成！")
-
