@@ -193,8 +193,8 @@ for csv in ('phase_data.csv', 'hardness.csv'):
     if not os.path.exists(csv):
         raise FileNotFoundError(f" {csv} target file not found")
 
-df_phase = pd.read_csv('phase_data.csv')
-df_hard = pd.read_csv('hardness.csv')
+df_phase = pd.read_csv('data/phase_data.csv')
+df_hard = pd.read_csv('data/hardness.csv')
 print(f"Original phase classification data: {len(df_phase)} records")
 print(f"Original hardness data: {len(df_hard)} records")
 
